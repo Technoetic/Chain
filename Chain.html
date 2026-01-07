@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>책임 연쇄 패턴: 사용자 등록 검증 시스템</title>
+    <style>
+        :root {
+            --primary: #00f3ff;
+            --secondary: #ff0055;
+            --success: #00ff9d;
+            --warning: #ffbd00;
+            --bg-dark: #0a0a12;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --font-mono: 'Courier New', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(0, 243, 255, 0.1) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(255, 0, 85, 0.1) 0%, transparent 20%);
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        /* Scanlines Effect */
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(0deg,
+                    rgba(0, 0, 0, 0.15),
+                    rgba(0, 0, 0, 0.15) 1px,
+                    transparent 1px,
+                    transparent 2px);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        header {
+            width: 100%;
+            max-width: 1200px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--glass-border);
+            backdrop-filter: blur(10px);
+            z-index: 20;
+            position: relative;
+        }
+
+        h1 {
+            font-family: var(--font-mono);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-size: 1.2rem;
+            text-shadow: 0 0 10px var(--primary);
+        }
+
+        h1 span {
+            color: var(--primary);
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            padding: 20px 0;
+            position: relative;
+            z-index: 5;
+        }
+
+        /* Glass Panel */
+        .glass-panel {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            backdrop-filter: blur(12px);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: 0.3s;
+        }
+
+        /* Form Panel */
+        .form-panel {
+            gap: 20px;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 10px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--primary);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        label {
+            font-size: 0.8rem;
+            color: var(--primary);
+            font-family: var(--font-mono);
+        }
+
+        input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: var(--font-mono);
+            outline: none;
+            transition: 0.3s;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+        }
+
+        input.error {
+            border-color: var(--secondary);
+            box-shadow: 0 0 10px rgba(255, 0, 85, 0.2);
+        }
+
+        input.success {
+            border-color: var(--success);
+            box-shadow: 0 0 10px rgba(0, 255, 157, 0.2);
+        }
+
+        .error-message {
+            font-size: 0.75rem;
+            color: var(--secondary);
+            font-family: var(--font-mono);
+            margin-top: 4px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .error-message.show {
+            opacity: 1;
+        }
+
+        button {
+            background: rgba(0, 243, 255, 0.1);
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 12px;
+            border-radius: 8px;
+            font-family: var(--font-mono);
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+            text-transform: uppercase;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button:hover:not(:disabled) {
+            background: var(--primary);
+            color: #000;
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
+        }
+
+        button:disabled {
+            border-color: #555;
+            color: #555;
+            background: transparent;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        button.success {
+            border-color: var(--success);
+            color: var(--success);
+            background: rgba(0, 255, 157, 0.1);
+        }
+
+        /* Chain Visualization */
+        .chain-panel {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chain-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px 0;
+        }
+
+        .chain-node {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            position: relative;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px solid var(--glass-border);
+            border-radius: 12px;
+            transition: all 0.3s;
+        }
+
+        .chain-node.pending {
+            opacity: 0.5;
+        }
+
+        .chain-node.processing {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
+            background: rgba(0, 243, 255, 0.1);
+        }
+
+        .chain-node.success {
+            border-color: var(--success);
+            box-shadow: 0 0 20px rgba(0, 255, 157, 0.3);
+            background: rgba(0, 255, 157, 0.1);
+        }
+
+        .chain-node.error {
+            border-color: var(--secondary);
+            box-shadow: 0 0 20px rgba(255, 0, 85, 0.3);
+            background: rgba(255, 0, 85, 0.1);
+        }
+
+        .chain-icon {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .chain-info {
+            flex: 1;
+        }
+
+        .chain-title {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .chain-description {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .chain-status {
+            font-size: 1.2rem;
+            width: 30px;
+            text-align: center;
+        }
+
+        .chain-arrow {
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.5rem;
+            color: var(--glass-border);
+            z-index: 1;
+        }
+
+        .chain-node:last-child .chain-arrow {
+            display: none;
+        }
+
+        /* Log Console */
+        .log-console {
+            flex-grow: 1;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            overflow-y: auto;
+            border: 1px solid var(--glass-border);
+            margin-top: 20px;
+            max-height: 200px;
+        }
+
+        .log-entry {
+            margin-bottom: 6px;
+            opacity: 0;
+            animation: fadeIn 0.3s forwards;
+        }
+
+        .log-time {
+            color: #666;
+            margin-right: 8px;
+        }
+
+        .log-info {
+            color: #aaa;
+        }
+
+        .log-success {
+            color: var(--success);
+        }
+
+        .log-error {
+            color: var(--secondary);
+        }
+
+        .log-warn {
+            color: var(--warning);
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        /* Result Panel */
+        .result-panel {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+            display: none;
+        }
+
+        .result-panel.show {
+            display: block;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-success {
+            color: var(--success);
+            font-family: var(--font-mono);
+            font-size: 1.1rem;
+            text-align: center;
+        }
+
+        @media (max-width: 968px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>Chain of <span>Responsibility</span> // 검증 시스템</h1>
+        <div style="font-size: 0.8rem; color: #888;">시스템: 온라인</div>
+    </header>
+
+    <div class="container">
+
+        <!-- FORM PANEL -->
+        <aside class="glass-panel form-panel">
+            <div class="panel-header">
+                <div class="status-dot"></div>
+                <span>사용자 등록 폼</span>
+            </div>
+
+            <form id="registration-form">
+                <div class="input-group">
+                    <label>사용자명 (Username)</label>
+                    <input type="text" id="username" placeholder="영문, 숫자, 언더스코어만 허용" autocomplete="off">
+                    <div class="error-message" id="username-error"></div>
+                </div>
+
+                <div class="input-group">
+                    <label>이메일 (Email)</label>
+                    <input type="email" id="email" placeholder="유효한 이메일 주소 입력" autocomplete="off">
+                    <div class="error-message" id="email-error"></div>
+                </div>
+
+                <div class="input-group">
+                    <label>비밀번호 (Password)</label>
+                    <input type="password" id="password" placeholder="최소 8자, 대소문자, 숫자 포함" autocomplete="off">
+                    <div class="error-message" id="password-error"></div>
+                </div>
+
+                <div class="input-group">
+                    <label>비밀번호 확인 (Confirm)</label>
+                    <input type="password" id="confirm-password" placeholder="비밀번호 재입력" autocomplete="off">
+                    <div class="error-message" id="confirm-password-error"></div>
+                </div>
+
+                <button type="submit" id="submit-btn">등록 요청</button>
+            </form>
+
+            <div class="result-panel" id="result-panel">
+                <div class="result-success">✓ 등록 성공! 모든 검증을 통과했습니다.</div>
+            </div>
+
+            <!-- LOGS -->
+            <div class="log-console" id="log-console">
+                <div class="log-entry"><span class="log-time">SYS</span> <span class="log-info">검증 시스템 준비 완료. 입력 대기 중...</span></div>
+            </div>
+        </aside>
+
+        <!-- CHAIN VISUALIZATION -->
+        <main class="glass-panel chain-panel">
+            <div class="panel-header">
+                <div class="status-dot"></div>
+                <span>책임 연쇄 처리 흐름</span>
+            </div>
+
+            <div class="chain-container" id="chain-container">
+                <!-- Chain nodes will be dynamically generated -->
+            </div>
+        </main>
+
+    </div>
+
+    <script>
+        // ============================================
+        // 책임 연쇄 패턴 (Chain of Responsibility Pattern)
+        // ============================================
+
+        // --- Handler 인터페이스 ---
+        class ValidationHandler {
+            constructor(name, description, icon) {
+                this.name = name;
+                this.description = description;
+                this.icon = icon;
+                this.nextHandler = null;
+            }
+
+            setNext(handler) {
+                this.nextHandler = handler;
+                return handler;
+            }
+
+            handle(request) {
+                throw new Error('handle() must be implemented');
+            }
+        }
+
+        // --- 구체적인 핸들러들 ---
+
+        // 1. 사용자명 검증 핸들러
+        class UsernameHandler extends ValidationHandler {
+            constructor() {
+                super('사용자명 검증', '영문, 숫자, 언더스코어만 허용', '👤');
+            }
+
+            handle(request) {
+                const username = request.username;
+                
+                if (!username) {
+                    return { success: false, message: '사용자명을 입력해주세요.', handler: this.name };
+                }
+
+                if (username.length < 3 || username.length > 20) {
+                    return { success: false, message: '사용자명은 3~20자 사이여야 합니다.', handler: this.name };
+                }
+
+                if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+                    return { success: false, message: '영문, 숫자, 언더스코어(_)만 사용 가능합니다.', handler: this.name };
+                }
+
+                // 검증 통과 - 다음 핸들러로 전달
+                if (this.nextHandler) {
+                    return this.nextHandler.handle(request);
+                }
+
+                return { success: true, message: '사용자명 검증 완료', handler: this.name };
+            }
+        }
+
+        // 2. 이메일 검증 핸들러
+        class EmailHandler extends ValidationHandler {
+            constructor() {
+                super('이메일 검증', '유효한 이메일 형식 확인', '📧');
+            }
+
+            handle(request) {
+                const email = request.email;
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+                if (!email) {
+                    return { success: false, message: '이메일을 입력해주세요.', handler: this.name };
+                }
+
+                if (!emailRegex.test(email)) {
+                    return { success: false, message: '유효한 이메일 주소를 입력해주세요.', handler: this.name };
+                }
+
+                // 검증 통과 - 다음 핸들러로 전달
+                if (this.nextHandler) {
+                    return this.nextHandler.handle(request);
+                }
+
+                return { success: true, message: '이메일 검증 완료', handler: this.name };
+            }
+        }
+
+        // 3. 비밀번호 강도 검증 핸들러
+        class PasswordStrengthHandler extends ValidationHandler {
+            constructor() {
+                super('비밀번호 강도 검증', '최소 8자, 대소문자, 숫자 포함', '🔒');
+            }
+
+            handle(request) {
+                const password = request.password;
+
+                if (!password) {
+                    return { success: false, message: '비밀번호를 입력해주세요.', handler: this.name };
+                }
+
+                if (password.length < 8) {
+                    return { success: false, message: '비밀번호는 최소 8자 이상이어야 합니다.', handler: this.name };
+                }
+
+                if (!/[a-z]/.test(password)) {
+                    return { success: false, message: '비밀번호에 소문자가 포함되어야 합니다.', handler: this.name };
+                }
+
+                if (!/[A-Z]/.test(password)) {
+                    return { success: false, message: '비밀번호에 대문자가 포함되어야 합니다.', handler: this.name };
+                }
+
+                if (!/[0-9]/.test(password)) {
+                    return { success: false, message: '비밀번호에 숫자가 포함되어야 합니다.', handler: this.name };
+                }
+
+                // 검증 통과 - 다음 핸들러로 전달
+                if (this.nextHandler) {
+                    return this.nextHandler.handle(request);
+                }
+
+                return { success: true, message: '비밀번호 강도 검증 완료', handler: this.name };
+            }
+        }
+
+        // 4. 비밀번호 일치 검증 핸들러
+        class PasswordMatchHandler extends ValidationHandler {
+            constructor() {
+                super('비밀번호 일치 검증', '비밀번호와 확인 비밀번호 일치 확인', '🔐');
+            }
+
+            handle(request) {
+                const password = request.password;
+                const confirmPassword = request.confirmPassword;
+
+                if (!confirmPassword) {
+                    return { success: false, message: '비밀번호 확인을 입력해주세요.', handler: this.name };
+                }
+
+                if (password !== confirmPassword) {
+                    return { success: false, message: '비밀번호가 일치하지 않습니다.', handler: this.name };
+                }
+
+                // 검증 통과 - 다음 핸들러로 전달
+                if (this.nextHandler) {
+                    return this.nextHandler.handle(request);
+                }
+
+                return { success: true, message: '비밀번호 일치 검증 완료', handler: this.name };
+            }
+        }
+
+        // 5. 중복 확인 핸들러 (시뮬레이션)
+        class DuplicateCheckHandler extends ValidationHandler {
+            constructor() {
+                super('중복 확인', '사용자명 및 이메일 중복 검사', '🔍');
+            }
+
+            handle(request) {
+                // 시뮬레이션: 실제로는 서버에 요청
+                const takenUsernames = ['admin', 'test', 'user'];
+                const takenEmails = ['admin@example.com', 'test@example.com'];
+
+                if (takenUsernames.includes(request.username)) {
+                    return { success: false, message: '이미 사용 중인 사용자명입니다.', handler: this.name };
+                }
+
+                if (takenEmails.includes(request.email)) {
+                    return { success: false, message: '이미 사용 중인 이메일입니다.', handler: this.name };
+                }
+
+                // 검증 통과 - 다음 핸들러로 전달
+                if (this.nextHandler) {
+                    return this.nextHandler.handle(request);
+                }
+
+                return { success: true, message: '중복 확인 완료', handler: this.name };
+            }
+        }
+
+        // --- 로그 시스템 ---
+        function log(msg, type = 'info') {
+            const consoleEl = document.getElementById('log-console');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'log-time';
+            const now = new Date();
+            timeSpan.innerText = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+
+            const textSpan = document.createElement('span');
+            textSpan.className = `log-${type}`;
+            textSpan.innerText = msg;
+
+            entry.appendChild(timeSpan);
+            entry.appendChild(textSpan);
+            consoleEl.appendChild(entry);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        // --- 체인 시각화 ---
+        function createChainVisualization(handlers) {
+            const container = document.getElementById('chain-container');
+            container.innerHTML = '';
+
+            handlers.forEach((handler, index) => {
+                const node = document.createElement('div');
+                node.className = 'chain-node pending';
+                node.id = `chain-node-${index}`;
+                node.dataset.handlerName = handler.name;
+
+                node.innerHTML = `
+                    <div class="chain-icon">${handler.icon}</div>
+                    <div class="chain-info">
+                        <div class="chain-title">${handler.name}</div>
+                        <div class="chain-description">${handler.description}</div>
+                    </div>
+                    <div class="chain-status" id="chain-status-${index}">○</div>
+                    ${index < handlers.length - 1 ? '<div class="chain-arrow">↓</div>' : ''}
+                `;
+
+                container.appendChild(node);
+            });
+        }
+
+        function updateChainNode(index, status) {
+            const node = document.getElementById(`chain-node-${index}`);
+            const statusEl = document.getElementById(`chain-status-${index}`);
+
+            // 모든 상태 클래스 제거
+            node.classList.remove('pending', 'processing', 'success', 'error');
+
+            switch (status) {
+                case 'processing':
+                    node.classList.add('processing');
+                    statusEl.textContent = '⟳';
+                    break;
+                case 'success':
+                    node.classList.add('success');
+                    statusEl.textContent = '✓';
+                    break;
+                case 'error':
+                    node.classList.add('error');
+                    statusEl.textContent = '✗';
+                    break;
+                default:
+                    node.classList.add('pending');
+                    statusEl.textContent = '○';
+            }
+        }
+
+        function resetChainNodes() {
+            const nodes = document.querySelectorAll('.chain-node');
+            nodes.forEach((node, index) => {
+                updateChainNode(index, 'pending');
+            });
+        }
+
+        // --- 체인 구성 및 확장된 핸들러 ---
+        class ExtendedValidationHandler extends ValidationHandler {
+            constructor(name, description, icon, validateFn) {
+                super(name, description, icon);
+                this.validateFn = validateFn;
+            }
+
+            handle(request) {
+                const result = this.validateFn(request);
+                
+                if (!result.success) {
+                    return result;
+                }
+
+                // 검증 통과 - 다음 핸들러로 전달
+                if (this.nextHandler) {
+                    return this.nextHandler.handle(request);
+                }
+
+                return { success: true, message: `${this.name} 검증 완료`, handler: this.name };
+            }
+        }
+
+        // --- 체인 구성 ---
+        function buildValidationChain() {
+            const usernameHandler = new UsernameHandler();
+            const emailHandler = new EmailHandler();
+            const passwordStrengthHandler = new PasswordStrengthHandler();
+            const passwordMatchHandler = new PasswordMatchHandler();
+            const duplicateCheckHandler = new DuplicateCheckHandler();
+
+            // 체인 구성
+            usernameHandler
+                .setNext(emailHandler)
+                .setNext(passwordStrengthHandler)
+                .setNext(passwordMatchHandler)
+                .setNext(duplicateCheckHandler);
+
+            return {
+                firstHandler: usernameHandler,
+                handlers: [usernameHandler, emailHandler, passwordStrengthHandler, passwordMatchHandler, duplicateCheckHandler]
+            };
+        }
+
+        // --- 폼 처리 ---
+        const chain = buildValidationChain();
+        createChainVisualization(chain.handlers);
+
+        const form = document.getElementById('registration-form');
+        const inputs = {
+            username: document.getElementById('username'),
+            email: document.getElementById('email'),
+            password: document.getElementById('password'),
+            confirmPassword: document.getElementById('confirm-password')
+        };
+
+        const errorElements = {
+            username: document.getElementById('username-error'),
+            email: document.getElementById('email-error'),
+            password: document.getElementById('password-error'),
+            confirmPassword: document.getElementById('confirm-password-error')
+        };
+
+        function clearErrors() {
+            Object.values(inputs).forEach(input => {
+                input.classList.remove('error', 'success');
+            });
+            Object.values(errorElements).forEach(el => {
+                el.textContent = '';
+                el.classList.remove('show');
+            });
+        }
+
+        function showError(field, message) {
+            inputs[field].classList.add('error');
+            inputs[field].classList.remove('success');
+            errorElements[field].textContent = message;
+            errorElements[field].classList.add('show');
+        }
+
+        function showSuccess(field) {
+            inputs[field].classList.add('success');
+            inputs[field].classList.remove('error');
+            errorElements[field].classList.remove('show');
+        }
+
+        // 체인 실행 함수 (애니메이션 포함)
+        async function executeChain(request) {
+            resetChainNodes();
+            clearErrors();
+            log('검증 체인 시작...', 'info');
+
+            let currentHandler = chain.firstHandler;
+            let handlerIndex = 0;
+
+            while (currentHandler) {
+                const handlerName = currentHandler.name;
+                const nodeIndex = chain.handlers.indexOf(currentHandler);
+
+                // 처리 중 상태 표시
+                updateChainNode(nodeIndex, 'processing');
+                log(`${handlerName} 처리 중...`, 'info');
+
+                // 약간의 지연 (시각적 효과)
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // 핸들러 실행
+                const result = currentHandler.handle(request);
+
+                if (!result.success) {
+                    // 실패 상태 표시
+                    updateChainNode(nodeIndex, 'error');
+                    log(`${handlerName} 실패: ${result.message}`, 'error');
+                    
+                    // 해당 필드에 에러 표시
+                    const fieldMap = {
+                        '사용자명 검증': 'username',
+                        '이메일 검증': 'email',
+                        '비밀번호 강도 검증': 'password',
+                        '비밀번호 일치 검증': 'confirmPassword',
+                        '중복 확인': 'username' // 중복 확인은 사용자명 또는 이메일
+                    };
+
+                    const field = fieldMap[handlerName];
+                    if (field) {
+                        showError(field, result.message);
+                    }
+
+                    return result;
+                }
+
+                // 성공 상태 표시
+                updateChainNode(nodeIndex, 'success');
+                log(`${handlerName} 통과`, 'success');
+
+                // 다음 핸들러로 이동
+                currentHandler = currentHandler.nextHandler;
+                handlerIndex++;
+
+                // 약간의 지연
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+
+            log('모든 검증 완료!', 'success');
+            return { success: true, message: '모든 검증을 통과했습니다.' };
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const request = {
+                username: inputs.username.value.trim(),
+                email: inputs.email.value.trim(),
+                password: inputs.password.value,
+                confirmPassword: inputs.confirmPassword.value
+            };
+
+            const result = await executeChain(request);
+
+            if (result.success) {
+                // 성공 시 모든 입력 필드에 성공 표시
+                Object.keys(inputs).forEach(key => {
+                    showSuccess(key);
+                });
+
+                // 결과 패널 표시
+                const resultPanel = document.getElementById('result-panel');
+                resultPanel.classList.add('show');
+
+                // 제출 버튼 비활성화
+                document.getElementById('submit-btn').disabled = true;
+                document.getElementById('submit-btn').classList.add('success');
+                document.getElementById('submit-btn').textContent = '등록 완료';
+            }
+        });
+
+        // 입력 필드 포커스 시 에러 메시지 초기화
+        Object.values(inputs).forEach(input => {
+            input.addEventListener('focus', () => {
+                input.classList.remove('error', 'success');
+                const fieldName = input.id.replace('-', '');
+                if (errorElements[fieldName]) {
+                    errorElements[fieldName].classList.remove('show');
+                }
+            });
+        });
+
+    </script>
+</body>
+
+</html>
